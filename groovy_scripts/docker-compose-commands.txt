@@ -1,0 +1,93 @@
+$ docker-compose 2>&1 | grep -E '  [a-z]+  ' | awk '{print $1}' | xargs -n1 -I{} docker-compose {} -h 2>&1 | grep -E '^\s*(Usage:|-+[a-z])'
+Usage: build [options] [--build-arg key=val...] [SERVICE...]
+    --force-rm              Always remove intermediate containers.
+    --no-cache              Do not use cache when building the image.
+    --pull                  Always attempt to pull a newer version of the image.
+    --build-arg key=val     Set build-time variables for one service.
+Usage: bundle [options]
+    --push-images              Automatically push images for any services
+    -o, --output PATH          Path to write the bundle file to.
+Usage: config [options]
+    --resolve-image-digests  Pin image tags to digests.
+    -q, --quiet              Only validate the configuration, don't print
+    --services               Print the service names, one per line.
+    --volumes                Print the volume names, one per line.
+Usage: create [options] [SERVICE...]
+    --force-recreate       Recreate containers even if their configuration and
+    --no-recreate          If containers already exist, don't recreate them.
+    --no-build             Don't build an image, even if it's missing.
+    --build                Build images before creating containers.
+Usage: down [options]
+    --rmi type          Remove images. Type must be one of:
+    -v, --volumes       Remove named volumes declared in the `volumes` section
+    --remove-orphans    Remove containers for services not defined in the
+Usage: events [options] [SERVICE...]
+    --json      Output events as a stream of json objects
+Usage: exec [options] SERVICE COMMAND [ARGS...]
+    -d                Detached mode: Run command in the background.
+    --privileged      Give extended privileges to the process.
+    -u, --user USER   Run the command as this user.
+    --index=index     index of the container if there are multiple
+Usage: help [COMMAND]
+Usage: images [options] [SERVICE...]
+-q     Only display IDs
+Usage: kill [options] [SERVICE...]
+    -s SIGNAL         SIGNAL to send to the container.
+Usage: logs [options] [SERVICE...]
+    --no-color          Produce monochrome output.
+    -f, --follow        Follow log output.
+    -t, --timestamps    Show timestamps.
+    --tail="all"        Number of lines to show from the end of the logs
+Usage: pause [SERVICE...]
+Usage: port [options] SERVICE PRIVATE_PORT
+    --protocol=proto  tcp or udp [default: tcp]
+    --index=index     index of the container if there are multiple
+Usage: ps [options] [SERVICE...]
+    -q    Only display IDs
+Usage: pull [options] [SERVICE...]
+    --ignore-pull-failures  Pull what it can and ignores images with pull failures.
+    --parallel              Pull multiple images in parallel.
+    --quiet                 Pull without printing progress information
+Usage: push [options] [SERVICE...]
+    --ignore-push-failures  Push what it can and ignores images with push failures.
+Usage: restart [options] [SERVICE...]
+  -t, --timeout TIMEOUT      Specify a shutdown timeout in seconds.
+Usage: rm [options] [SERVICE...]
+    -f, --force   Don't ask to confirm removal
+    -s, --stop    Stop the containers, if required, before removing
+    -v            Remove any anonymous volumes attached to containers
+    -a, --all     Deprecated - no effect.
+Usage: run [options] [-v VOLUME...] [-p PORT...] [-e KEY=VAL...] SERVICE [COMMAND] [ARGS...]
+    -d                    Detached mode: Run container in the background, print
+    --name NAME           Assign a name to the container
+    --entrypoint CMD      Override the entrypoint of the image.
+    -e KEY=VAL            Set an environment variable (can be used multiple times)
+    -u, --user=""         Run as specified username or uid
+    --no-deps             Don't start linked services.
+    --rm                  Remove container after run. Ignored in detached mode.
+    -p, --publish=[]      Publish a container's port(s) to the host
+    --service-ports       Run command with the service's ports enabled and mapped
+    -v, --volume=[]       Bind mount a volume (default [])
+    -w, --workdir=""      Working directory inside the container
+Usage: scale [options] [SERVICE=NUM...]
+  -t, --timeout TIMEOUT      Specify a shutdown timeout in seconds.
+Usage: start [SERVICE...]
+Usage: stop [options] [SERVICE...]
+  -t, --timeout TIMEOUT      Specify a shutdown timeout in seconds.
+Usage: top [SERVICE...]
+Usage: unpause [SERVICE...]
+Usage: up [options] [--scale SERVICE=NUM...] [SERVICE...]
+    -d                         Detached mode: Run containers in the background,
+    --no-color                 Produce monochrome output.
+    --no-deps                  Don't start linked services.
+    --force-recreate           Recreate containers even if their configuration
+    --no-recreate              If containers already exist, don't recreate them.
+    --no-build                 Don't build an image, even if it's missing.
+    --build                    Build images before starting containers.
+    --abort-on-container-exit  Stops all containers if any container was stopped.
+    -t, --timeout TIMEOUT      Use this timeout in seconds for container shutdown
+    --remove-orphans           Remove containers for services not
+    --exit-code-from SERVICE   Return the exit code of the selected service container.
+    --scale SERVICE=NUM        Scale SERVICE to NUM instances. Overrides the `scale`
+Usage: version [--short]
+    --short     Shows only Compose's version number.

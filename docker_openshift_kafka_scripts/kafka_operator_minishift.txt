@@ -1,0 +1,93 @@
+1. minishift start --memory 4GB
+
+2. eval $(minishift oc-env)
+
+3. oc login system:admin
+
+4. curl -L https://github.com/strimzi/strimzi-kafka-operator/releases/download/0.8.2/strimzi-0.8.2.tar.gz | tar xz
+
+5. cd  strimzi-0.8.2
+
+6. oc new-project mykafka
+
+7. Update 5 files for the namespace 
+
+sed -i '' 's/namespace: .*/namespace: mykafka/' install/cluster-operator/*RoleBinding*.yaml
+
+8. oc apply -f install/cluster-operator -n mykafka
+9. oc apply -f examples/templates/cluster-operator -n mykafka
+
+10. oc get pods
+NAME                                        READY     STATUS    RESTARTS   AGE
+strimzi-cluster-operator-6f455cbdfb-7wk65   1/1       Running   0          9m
+
+11. oc apply -f examples/kafka/kafka-ephemeral.yaml
+
+12. oc get pods
+NAME                                        READY     STATUS    RESTARTS   AGE
+my-cluster-zookeeper-0                      2/2       Running   0          46s
+my-cluster-zookeeper-1                      2/2       Running   0          46s
+my-cluster-zookeeper-2                      2/2       Running   0          46s
+strimzi-cluster-operator-6f455cbdfb-7wk65   1/1       Running   0          11m
+
+13. deploy producer
+oc run kafka-producer -ti --image=strimzi/kafka:0.8.2 --restart=Never \-- bin/kafka-console-producer.sh --broker-list cluster-name-kafka-bootstrap:9092 --topic my-topic
+
+If you don't see a command prompt, try pressing enter.
+pod mykafka/kafka-producer terminated (Error)
+
+oc logs kafka-producer
+OpenJDK 64-Bit Server VM warning: If the number of processors is expected to increase from one, then you should configure the number of parallel GC threads appropriately using -XX:ParallelGCThreads=N
+[2018-10-28 16:37:46,808] WARN Removing server cluster-name-kafka-bootstrap:9092 from bootstrap.servers as DNS resolution failed for cluster-name-kafka-bootstrap (org.apache.kafka.clients.ClientUtils)
+org.apache.kafka.common.KafkaException: Failed to construct kafka producer
+	at org.apache.kafka.clients.producer.KafkaProducer.<init>(KafkaProducer.java:457)
+	at org.apache.kafka.clients.producer.KafkaProducer.<init>(KafkaProducer.java:304)
+	at kafka.tools.ConsoleProducer$.main(ConsoleProducer.scala:45)
+	at kafka.tools.ConsoleProducer.main(ConsoleProducer.scala)
+Caused by: org.apache.kafka.common.config.ConfigException: No resolvable bootstrap urls given in bootstrap.servers
+	at org.apache.kafka.clients.ClientUtils.parseAndValidateAddresses(ClientUtils.java:66)
+	at org.apache.kafka.clients.producer.KafkaProducer.<init>(KafkaProducer.java:406)
+	... 3 more
+
+
+Try again
+oc get pods
+NAME                                          READY     STATUS    RESTARTS   AGE
+kafka-producer                                0/1       Error     0          2m
+my-cluster-entity-operator-748fd7c5dd-sjjfz   3/3       Running   0          4m
+my-cluster-kafka-0                            2/2       Running   0          4m
+my-cluster-kafka-1                            2/2       Running   0          4m
+my-cluster-kafka-2                            2/2       Running   0          4m
+my-cluster-zookeeper-0                        2/2       Running   0          5m
+my-cluster-zookeeper-1                        2/2       Running   0          5m
+my-cluster-zookeeper-2                        2/2       Running   0          5m
+strimzi-cluster-operator-6f455cbdfb-7wk65     1/1       Running   0          15m
+
+Note: my-cluster-kakfa
+
+oc delete pod kafka-producer
+
+oc run kafka-producer -ti --image=strimzi/kafka:0.8.2 --restart=Never \-- bin/kafka-console-producer.sh --broker-list my-cluster-kafka-bootstrap:9092 --topic my-topic
+
+
+14. In another terminal, deploy consumer (replace "cluster-name" with "my-cluster")
+oc run kafka-consumer -ti --image=strimzi/kafka:0.8.2 --restart=Never \-- bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --from-beginning
+
+producer console:
+If you don't see a command prompt, try pressing enter.
+OpenJDK 64-Bit Server VM warning: If the number of processors is expected to increase from one, then you should configure the number of parallel GC threads appropriately using -XX:ParallelGCThreads=N
+>one
+[2018-10-28 16:42:42,534] WARN [Producer clientId=console-producer] Error while fetching metadata with correlation id 1 : {my-topic=LEADER_NOT_AVAILABLE} (org.apache.kafka.clients.NetworkClient)
+>two
+>thre
+>four
+>
+
+consumer console:
+If you don't see a command prompt, try pressing enter.
+OpenJDK 64-Bit Server VM warning: If the number of processors is expected to increase from one, then you should configure the number of parallel GC threads appropriately using -XX:ParallelGCThreads=N
+one
+two
+thre
+four
+

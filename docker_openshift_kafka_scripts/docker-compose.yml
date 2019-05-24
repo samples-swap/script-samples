@@ -1,0 +1,71 @@
+version: "3.2"
+services:
+  t3-db:
+    # This image contains an initialised database with a single test system called "Demo"
+    image: iliaddockerhub/t3-boa:database
+    container_name: t3-db-pg-t3s
+    environment:
+      - POSTGRES_PASSWORD=cheNgei6
+    networks:
+      t3s:
+        aliases:
+          - t3-db
+    ports:
+      # Publish the database port to make it available externally.
+      - "5432:5432"
+    volumes:
+      - t3switch-data:/var/lib/postgresql/data
+  t3-liquibase:
+    # This container updates the database and then exits - it's not supposed to be running permanently
+    image: iliaddockerhub/t3-boa:liquibase
+    container_name: t3-liquibase-t3s
+    environment:
+      - db_driver=org.postgresql.Driver
+      - db_url=jdbc:postgresql://t3-db-pg-t3s:5432/postgres
+      - db_user=t3user
+      - db_pass=resu3t
+    depends_on:
+      - "t3-db"
+    networks:
+      t3s:
+        aliases:
+          - t3-liquibase
+  t3-harness:
+    image: iliaddockerhub/t3-boa:harness
+    container_name: t3-harness-t3s
+    environment:
+      - T3_LICENCE=8A7B94852264763CABE91C25BD8C2677
+    ports:
+      # If the harness needs to listen for incoming connections (e.g. from member institutions) they
+      # must be declared here. Syntax is <Host port>:<Container port>. You can also specify a range of
+      # ports, for example:
+      - "13000-13100:13000-13100"
+      - "30000-30100:30000-30100"
+    depends_on:
+      - "t3-db"
+    volumes:
+      - t3switch-harness:/opt/t3switch/config
+    networks:
+      t3s:
+        aliases:
+          - t3-harness
+  t3-api:
+    image: iliaddockerhub/t3-boa:api
+    container_name: t3-api-t3s
+    ports:
+      # Publish port 8080 for the t3:Switch web application and API
+      - "8080:8080"
+    depends_on:
+      - "t3-db"
+    networks:
+      t3s:
+        aliases:
+          - t3-api
+networks:
+  t3s:
+    driver: bridge
+
+volumes:
+  t3switch-data:
+  t3switch-harness:
+

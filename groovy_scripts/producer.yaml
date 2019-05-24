@@ -1,0 +1,7 @@
+- {configs: {compression.type: snappy, value.serializer: org.apache.kafka.common.serialization.StringSerializer,
+    interceptor.LoggingProducerInterceptor.file: /var/folders/3v/05f6zqc164g*b55zrdlhk*z00000gn/T/producer3683756155677198489.log,
+    acks: '1', bootstrap.servers: 'localhost:32818', interceptor.classes: LoggingProducerInterceptor,
+    key.serializer: org.apache.kafka.common.serialization.StringSerializer, client.id: api,
+    linger.ms: '100'}}
+- {thread: 10, key: 5af19764bfe52300144eea35, value: '{"_links":{"self":{"href":"http://169.254.169.254:8080/app/api/user/doe","hreflang":"en","type":"user"}},"id":"5af19764bfe52300144eea35","name":"John Doe"}'}
+- {thread: 10, key: 5af19764bfe52300144eea35, value: '{"_links":{"self":{"href":"http://169.254.169.254:8080/app/api/user/doe","hreflang":"en","type":"user"}},"id":"5af19764bfe52300144eea35","seasons":"John Doe"}'}

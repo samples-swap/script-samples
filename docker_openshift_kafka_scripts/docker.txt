@@ -1,0 +1,37 @@
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/mnt/c/Program Files (x86)/Common Files/Oracle/Java/javapath:/mnt/c/ProgramData/DockerDesktop/version-bin:/mnt/c/Program Files/Docker/Docker/resources/bin:/mnt/c/Program Files/Java/jdk1.8.0_202/bin:/mnt/c/Python27:/mnt/c/Python27/Scripts:/mnt/c/Windows/System32:/mnt/c/Windows:/mnt/c/Windows/System32/wbem:/mnt/c/Windows/System32/WindowsPowerShell/v1.0:/mnt/c/Windows/System32/OpenSSH:/mnt/c/usr/minishift:/mnt/c/ProgramData/chocolatey/bin:/mnt/c/usr/apache-maven-3.6.0/bin:/mnt/c/Program Files (x86)/Symantec/VIP Access Client:/mnt/c/Program Files (x86)/Bitvise SSH Client:/mnt/c/Ruby26-x64/bin:/mnt/c/Users/swapa/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/swapa/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/usr/minishift:/snap/bin
+
+
+docker run --name=mysql57 \
+   --mount type=bind,src=/path-on-host-machine/my.cnf,dst=/etc/my.cnf \
+   --mount type=bind,src=/path-on-host-machine/datadir,dst=/var/lib/mysql \        
+   -d mysql/mysql-server:5.7
+
+
+delimiter //
+CREATE TRIGGER upd_check BEFORE UPDATE ON account
+       FOR EACH ROW
+       BEGIN
+           IF NEW.amount < 0 THEN
+               SET NEW.amount = 0;
+           ELSEIF NEW.amount > 100 THEN
+               SET NEW.amount = 100;
+           END IF;
+       END;//
+delimiter ;
+
+docker login --username=swapanc --password=Tublu1224!
+
+docker pull iliaddockerhub/t3-boa:database
+docker pull iliaddockerhub/t3-boa:harness
+docker pull iliaddockerhub/t3-boa:api
+
+docker tag ea1a4e2c862e swapanc/t3tester:database
+\
+docker tag ea1a4e2c862e swapanc/t3tester:harness
+docker tag 8f228f2e07c6 swapanc/t3tester:api
+
+docker push swapanc/t3tester
+
+cker -H ssh://vagrant@DESKTOP-VISUEBJdock
+
+docker login --username=yourhubusername --email=youremail@company.com=yourhubusername --email=youremail@company.com
