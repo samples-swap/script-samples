@@ -1,0 +1,16 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: app1-ing
+  namespace: default
+  labels:
+    app: app1
+spec:
+  rules:
+    - host: app1.example.com
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: app1-service
+              servicePort: http
