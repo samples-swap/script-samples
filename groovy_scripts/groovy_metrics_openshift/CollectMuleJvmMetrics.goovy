@@ -1,0 +1,264 @@
+import groovy.json.JsonSlurper
+import org.apache.commons.cli.Option
+import groovyx.net.http.RESTClient
+import java.time.Instant
+
+// Uses jolokia's REST API exposed from OpenShift to periodically output the metrics of the given nodes
+
+@Grab(group='org.codehaus.groovy.modules.http-builder', module='http-builder', version='0.7.1')
+
+/* 
+ *  Update these if required
+ */
+// Openshift URL
+def OSE_BASE_URL = 'https://my.non-prod.openshift.env:8443'
+// Name of InfluxDB database (this script creates this Influx database if it doesn't already exist)
+def METRICS_DB_NAME = 'data'
+def METRICS_COLLECTION_INTERVAL_IN_MILLI = 10000  // 10 sec
+/* 
+ *  jolokia MBean path constants
+ */
+def JOLOKIA_PATH_HEAP_MEMORY_USAGE = '/read/java.lang:type=Memory/HeapMemoryUsage'
+def JOLOKIA_PATH_NON_HEAP_MEMORY_USAGE = '/read/java.lang:type=Memory/NonHeapMemoryUsage'
+def JOLOKIA_PATH_PROC_CPU_LOAD = '/read/java.lang:type=OperatingSystem/ProcessCpuLoad'
+def JOLOKIA_PATH_SYS_CPU_LOAD = '/read/java.lang:type=OperatingSystem/SystemCpuLoad'
+def JOLOKIA_PATH_THREAD_COUNT = '/read/java.lang:type=Threading/ThreadCount'
+def JOLOKIA_PATH_PEAK_THREAD_COUNT = '/read/java.lang:type=Threading/PeakThreadCount'
+def JOLOKIA_PATH_LOADED_CLASSES_COUNT = '/read/java.lang:type=ClassLoading/LoadedClassCount'
+
+
+/*
+ * CLI processing
+ */
+def cli = new CliBuilder(
+  usage: 'groovy CollectMuleJvmMetrics.groovy --app <app A>,<app B> --env <Openshift environment> --token $(oc whoami -t) --dbUrl <Influx DB URL>',
+  width: 200
+)
+cli.with {
+  h longOpt: 'help', 'Show usage information'
+  a longOpt: 'app',  args: Option.UNLIMITED_VALUES, required: true, valueSeparator: ',' as char,
+    'App names separated by a comma, e.g. api-payment-v1,api-security-v1'
+  e longOpt: 'env',   args: 1, required: true,  argName: 'env',   'Openshift environment e.g. uat'
+  t longOpt: 'token', args: 1, required: true,  argName: 'token', 'Openshift auth token from `oc whoami -t`'
+  d longOpt: 'dbUrl', args: 1, required: false, argName: 'dbUrl', 'Influx database instance to push metrics to (optional)'
+}
+
+def options = cli.parse args
+
+/*
+ *  Setup
+ */
+def apps = options?.apps
+def env = options?.env
+def authToken = options?.token
+def namespace = '/api/v1/namespaces/'+env+'/pods'
+def dbRestClient = null
+Timer timer = new Timer ()
+
+println 'Getting metrics for apps ' + apps + ' in env ' + env
+
+/*
+ *  Initialise InfluxDB RESTClient if DB argument provided
+ */
+if (options?.dbUrl) {
+  dbRestClient = new RESTClient( options?.dbUrl )
+  println 'Pushing metrics to DB via instance: ' + options?.dbUrl // + ', database: '+ METRICS_DB_NAME
+  //dbRestClient.ignoreSSLIssues() // TODO allow HTTPS
+
+  // Create database (idempotent)
+  def create_database_query_string = 'CREATE DATABASE ' + METRICS_DB_NAME
+  def response = dbRestClient.post(
+    path: 'query',
+    body: [ 'q': create_database_query_string ],
+    requestContentType: groovyx.net.http.ContentType.URLENC
+  )
+  def responseMap = response.getData()
+
+  if(responseMap?.results[0]?.statement_id != 0) {
+    println 'Uh oh, something went wrong creating the InfluxDB database: '+responseMap
+    System.exit(-1)
+  }
+}
+
+if (apps) {
+  /*
+   *  Create REST Client
+   */
+  println 'Setting jolokia URL: '+OSE_BASE_URL
+  def jolokiaRestClient = new RESTClient( OSE_BASE_URL )
+  // Set Auth headers
+  jolokiaRestClient.headers['Authorization'] = 'Bearer ' + authToken
+  // We don't care about OSE's self-signed certs
+  jolokiaRestClient.ignoreSSLIssues()
+  // Get the pod name for the app
+  def appPods = getPodNames(jolokiaRestClient, namespace, apps)
+  
+  println sprintf('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s',
+    'app','instance','env','created_ts', 
+    'memory_heap_used', 'memory_heap_committed', 
+    'memory_non_heap_used', 'memory_non_heap_committed', 
+    'cpu_load_process', 'cpu_load_system',
+    'thread_count', 'thread_count_peak', 'classes_loaded_count')
+  /*
+   *  Task called on a timer that retrieves metrics
+   */
+  TimerTask timedTask = new TimerTask () {
+    @Override
+    public void run () {
+
+      appPods?.each { app, pods ->
+        pods?.each { pod ->
+          def podName = '/https:'+pod+':8778/proxy/jolokia'
+          def metricsMap = [:]
+          // Current system time before MBean REST calls is close enough for this application
+          def unixTimestamp = System.currentTimeMillis()
+
+          // Call metrics related helper methods
+          hMem  = getMbean(jolokiaRestClient,namespace,podName,JOLOKIA_PATH_HEAP_MEMORY_USAGE)
+          nhMem = getMbean(jolokiaRestClient,namespace,podName,JOLOKIA_PATH_NON_HEAP_MEMORY_USAGE)
+          pCpu  = getMbean(jolokiaRestClient,namespace,podName,JOLOKIA_PATH_PROC_CPU_LOAD)
+          sCpu  = getMbean(jolokiaRestClient,namespace,podName,JOLOKIA_PATH_SYS_CPU_LOAD)
+          tc    = getMbean(jolokiaRestClient,namespace,podName,JOLOKIA_PATH_THREAD_COUNT)
+          pTc   = getMbean(jolokiaRestClient,namespace,podName,JOLOKIA_PATH_PEAK_THREAD_COUNT)
+          lcc   = getMbean(jolokiaRestClient,namespace,podName,JOLOKIA_PATH_LOADED_CLASSES_COUNT)
+            
+          metricsMap['app'] = app
+          metricsMap['instance'] = pod
+          metricsMap['env'] = env
+          metricsMap['created_ts'] = unixTimestamp
+          metricsMap['memory_heap_used'] = hMem?.value?.used/1024/1024                // bytes -> megabytes
+          metricsMap['memory_heap_committed'] = hMem?.value?.committed/1024/1024      //   "           "   
+          metricsMap['memory_non_heap_used'] = nhMem?.value?.used/1024/1024           //   "           "   
+          metricsMap['memory_non_heap_committed'] = nhMem?.value?.committed/1024/1024 //   "           "   
+          metricsMap['cpu_load_process'] = pCpu?.value*100                            // get % out of 100
+          metricsMap['cpu_load_system'] = sCpu?.value*100                             //   "           "   
+          metricsMap['thread_count'] = tc?.value
+          metricsMap['thread_count_peak'] = pTc?.value
+          metricsMap['classes_loaded_count'] = lcc?.value
+          
+          // Pretty print results to console in realtime
+          println sprintf(
+            '%s,%s,%s,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%s,%s,%s',
+            metricsMap['app'], metricsMap['instance'], metricsMap['env'], 
+            // Heap memory
+            metricsMap['created_ts'], metricsMap['memory_heap_used'], metricsMap['memory_heap_committed'], 
+            // Non-heap memory
+            metricsMap['memory_non_heap_used'], metricsMap['memory_non_heap_committed'], 
+            // CPU
+            metricsMap['cpu_load_process'], metricsMap['cpu_load_system'], 
+            // Threads
+            metricsMap['thread_count'], metricsMap['thread_count_peak'], 
+            // Classes
+            metricsMap['classes_loaded_count']
+          )
+      
+          /*
+           *  Push to InfluxDB if DB URL provided
+           */
+          if(dbRestClient) {
+            insertMetrics(METRICS_DB_NAME, dbRestClient, metricsMap, unixTimestamp)
+          }
+        }
+      }
+    } 
+  }
+  /*
+   *  Execute repeating task to collection metrics
+   */
+  timer.schedule (timedTask, 0l, METRICS_COLLECTION_INTERVAL_IN_MILLI)
+}
+
+/* 
+ *  Helper methods
+ */
+
+/* 
+ *  Filter all OSE environment props to retrieve pod names for given application
+ *  Returns a map of Apps and their corresponding pod instance names
+ */
+def getPodNames(jolokiaRestClient, namespace, apps) {
+  try {
+    def appPods = [:]
+    //  Retrieve all OSE environment properties
+    def response = jolokiaRestClient.get path: namespace
+    def responseMap = response.getData()
+    apps.each { app -> 
+      appPods."$app" = responseMap?.items
+                          ?.findAll { 
+                            it?.metadata?.name?.contains( app ) 
+                          }?.collect { 
+                            it?.metadata?.name 
+                          }
+    }
+    return appPods
+  } catch( ex ) { 
+    ex.printStackTrace()
+    if( ex?.getResponse()?.data?.text?.contains('Unauthorized') ) {
+      println 'Unauthorized, try `oc login`'
+    }
+    System.exit(-1)
+  }
+}
+  
+/* 
+ *  Invoke Jolokia REST endpoint to execute a particular MBean
+ *  Returns a map containing the output of the MBean function
+ */
+def getMbean(jolokiaRestClient, namespace, podName, mbean) {
+  def jsonSlurper = new JsonSlurper()
+  try {
+    def response = jolokiaRestClient.get path: namespace + podName + mbean 
+    def responseMap = jsonSlurper.parseText( response.data.text )
+    return responseMap
+  } catch( ex ) { 
+    ex.printStackTrace()
+    if( ex?.getResponse()?.data?.text?.contains('Unauthorized') ) {
+      println 'Unauthorized, try `oc login`'
+    }
+    System.exit(-1)
+  }
+}
+
+/*
+ *  Invoke Influx DB REST client to publish timeseries metrics
+ */
+def insertMetrics(
+    dbName,
+    dbRestClient,
+    metricsMap,
+    timestamp) {
+      // Prepare POST body (there might be better way to do this with RESTClient... I'm working from InfluxDB examples.)
+      def body =
+        // App name as the series (table) name
+        metricsMap['app']+
+        // Write our field-keys (meta-data tags)
+        ',env='+metricsMap['env']+
+        ',instance='+metricsMap['instance']+
+        ' '+ // space = InfluxDB field-key / value separator
+        // Write our values
+        'memory_heap_used='+metricsMap['memory_heap_used']+
+        ',memory_heap_committed='+metricsMap['memory_heap_committed']+
+        ',memory_non_heap_used='+metricsMap['memory_non_heap_used']+
+        ',memory_non_heap_committed='+metricsMap['memory_non_heap_committed']+
+        ',cpu_load_process='+metricsMap['cpu_load_process']+
+        ',cpu_load_system='+metricsMap['cpu_load_system']+
+        ',thread_count='+metricsMap['thread_count']+
+        ',thread_count_peak='+metricsMap['thread_count_peak']+
+        ',classes_loaded_count='+metricsMap['classes_loaded_count']+
+        ' '+ // space = InfluxDB value / timestamp separator
+        // Write our timestamp
+        timestamp
+      try {
+        // POST JVM metrics to Influx DB via REST client
+        // Specify timestamp precision is in milliseconds
+        def resp = dbRestClient.post(
+            path: 'write',
+            query: [ 'db': dbName, 'precision': 'ms' ],
+            body: body.bytes,
+            requestContentType: groovyx.net.http.ContentType.BINARY
+          )
+      } catch( ex ) { 
+        ex.printStackTrace()
+        System.exit(-1)
+      }
+}
