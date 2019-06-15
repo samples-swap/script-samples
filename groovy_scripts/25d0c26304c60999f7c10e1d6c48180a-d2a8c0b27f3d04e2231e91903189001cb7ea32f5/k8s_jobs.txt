@@ -1,0 +1,4 @@
+0,15,30,45 * * * * JOB_NAME=Etl::Invest cd /app && some command
+0,15,30,45 * * * * JOB_NAME=Etl::NewsWorker cd /app && some command
+0 * * * * JOB_NAME=Takeover cd /app && some command
+0 * * * * JOB_NAME=JointInves cd /app && some command
