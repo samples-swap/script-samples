@@ -1,0 +1,27 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: ${jobName}
+  labels:
+    app: data-job
+spec:
+  schedule: "${cronTime}"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: data
+            image: hub.docker.io/testimage:${imageTag}
+            envFrom:
+            - configMapRef:
+                name: some-cm
+            args:
+            - /bin/bash
+            - -l 
+            - -c
+            - ${jobCommand}
+          restartPolicy: OnFailure
