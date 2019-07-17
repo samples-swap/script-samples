@@ -1,0 +1,15 @@
+bin
+target
+build
+.gradle
+*.class
+.settings
+.classpath
+.project
+lib
+.DS_Store
+.groovy
+.idea/
+*.iml
+*.swp
+/out

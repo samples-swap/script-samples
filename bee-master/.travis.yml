@@ -1,0 +1,7 @@
+language: groovy
+
+jdk:
+- openjdk8
+
+env:
+- TERM=dumb
